@@ -1,0 +1,30 @@
+{
+    "name": "{{ name }}",
+    "summary": "",
+    "version": "16.0.1.0",
+    "author": "NOS ERP Consulting",
+    "website": "https://www.nostech.vn",
+    "license": "",
+    # "pre_init_hook": "pre_init_hook",
+    # "post_init_hook": "post_init_hook",
+    # "post_load": "post_load",
+    # "uninstall_hook": "uninstall_hook",
+    "external_dependencies": {
+        "python": [],
+        "bin": [],
+    },
+    "depends": [],
+    "maintainers": [],
+    "data": [
+        # "security/ir.model.access.csv",
+    ],
+   "assets": {
+        "web.assets_unit_tests": [
+            "{{ name }}/static/scss/**/*",
+            "{{ name }}/static/js/**/*",
+            "{{ name }}/static/xml/**/*",
+        ],
+    },
+    "application": True,
+    "installable": True,
+}
