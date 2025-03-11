@@ -36,7 +36,7 @@ from odoo.tools import (
     OrderedSet,
     SQL,
 )
-from odoo.tools.mail import email_re, email_split, is_html_empty
+from odoo.tools.mail import email_re, email_split, is_html_empty, generate_tracking_message_id
 from odoo.tools.misc import StackMap
 
 
@@ -754,13 +754,19 @@ class AccountMove(models.Model):
     # COMPUTE METHODS
     # -------------------------------------------------------------------------
 
-    @api.depends('move_type')
+    @api.depends('move_type', 'partner_id')
     def _compute_invoice_default_sale_person(self):
         # We want to modify the sale person only when we don't have one and if the move type corresponds to this condition
         # If the move doesn't correspond, we remove the sale person
         for move in self:
             if move.is_sale_document(include_receipts=True):
-                move.invoice_user_id = move.invoice_user_id or self.env.user
+                if move.partner_id:
+                    move.invoice_user_id = (
+                        move.invoice_user_id
+                        or move.partner_id.user_id
+                        or move.partner_id.commercial_partner_id.user_id
+                        or self.env.user
+                    )
             else:
                 move.invoice_user_id = False
 
@@ -1875,7 +1881,13 @@ class AccountMove(models.Model):
                 move.move_type in ('in_invoice', 'in_refund')
                 AND (
                    move.ref = duplicate_move.ref
-                   AND (move.invoice_date = duplicate_move.invoice_date OR move.state = 'draft')
+                   AND (
+                       move.invoice_date IS NULL
+                       OR
+                       duplicate_move.invoice_date IS NULL
+                       OR
+                       date_part('year', move.invoice_date) = date_part('year', duplicate_move.invoice_date)
+                   )
                 )
             """)
             to_query.append((in_moves, in_moves_sql_condition))
@@ -4997,7 +5009,10 @@ class AccountMove(models.Model):
             and not self.abnormal_amount_warning
             and not self.restrict_mode_hash_table
         ):
-            self.action_post()
+            if self.duplicated_ref_ids:
+                self.message_post(body=_("Auto-post was disabled on this invoice because a potential duplicate was detected."))
+            else:
+                self.action_post()
 
     def _show_autopost_bills_wizard(self):
         if (
@@ -5090,7 +5105,7 @@ class AccountMove(models.Model):
 
     def action_switch_move_type(self):
         if any(move.posted_before for move in self):
-            raise ValidationError(_("You cannot switch the type of a posted document."))
+            raise ValidationError(_("You cannot switch the type of a document which has been posted once."))
         if any(move.move_type == "entry" for move in self):
             raise ValidationError(_("This action isn't available for this document."))
 
@@ -5943,7 +5958,9 @@ class AccountMove(models.Model):
                 'company_email': self.env.company.email,
                 'company_name': self.env.company.name,
             })
-            self._routing_create_bounce_email(message_dict['from'], body, message)
+            self._routing_create_bounce_email(
+                message_dict['from'], body, message,
+                references=f'{message_dict["message_id"]} {generate_tracking_message_id("loop-detection-bounce-email")}')
             return ()
         return super()._routing_check_route(message, message_dict, route, raise_exception=raise_exception)
 

@@ -1721,7 +1721,7 @@ msgstr "주문할 때 고객 분류 (면세, 현장 또는 테이크아웃 등)�
 #. odoo-javascript
 #: code:addons/point_of_sale/static/src/app/generic_components/list_container/list_container.js:0
 msgid "Choose an order"
-msgstr ""
+msgstr "주문 선택하기"
 
 #. module: point_of_sale
 #: model:ir.model.fields,help:point_of_sale.field_res_company__point_of_sale_ticket_portal_url_display_mode
@@ -9012,3 +9012,12 @@ msgid ""
 msgstr ""
 "{{ line.has_valid_product_lot() ? 'Valid product lot' : 'Invalid product "
 "lot'}}"
+
+#. module: point_of_sale
+#. odoo-python
+#: code:addons/point_of_sale/models/account_journal.py:0
+#, python-format
+msgid ""
+"This journal is associated with payment method %s that is being used by "
+"order %s in the active pos session %s"
+msgstr "이 전표는 활성화된 POS 세션 %s의 주문 %s에서 사용 중인 %s 결제 수단과 연결되어 있습니다."
