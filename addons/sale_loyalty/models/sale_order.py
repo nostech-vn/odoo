@@ -54,6 +54,7 @@ class SaleOrder(models.Model):
         loyalty_history_data = self.env['loyalty.history'].sudo()._read_group(
             domain=[
                 ('order_id', 'in', confirmed_so.ids),
+                ('order_model', '=', self._name),
             ],
             groupby=['order_id'],
             aggregates=['issued:sum', 'used:sum'],
@@ -277,20 +278,18 @@ class SaleOrder(models.Model):
         reward.ensure_one()
         assert reward.discount_applicability == 'order'
 
-        if reward.program_id.is_payment_program:
+        lines = self.order_line.filtered(lambda line: not line.display_type)
+        if not reward.program_id.is_payment_program:
             # Gift cards and eWallets are applied on the total order amount
-            lines = self.order_line
-        else:
             # Other types of programs are not expected to apply on delivery lines
-            lines = self.order_line - self._get_no_effect_on_threshold_lines()
+            lines -= self._get_no_effect_on_threshold_lines()
 
         discountable = 0
         discountable_per_tax = defaultdict(float)
 
         AccountTax = self.env['account.tax']
-        order_lines = self.order_line.filtered(lambda x: not x.display_type)
         base_lines = []
-        for line in order_lines:
+        for line in lines:
             base_line = line._prepare_base_line_for_taxes_computation()
             taxes = base_line['tax_ids'].flatten_taxes_hierarchy()
             if not reward.program_id.is_payment_program:
@@ -936,13 +935,18 @@ class SaleOrder(models.Model):
         # |       STEP 1: Retrieve all applicable programs    |
         # +===================================================+
 
-        # Automatically load in eWallet coupons
+        # Automatically load in eWallet and loyalty cards coupons with previously received points
         if self._allow_nominative_programs():
-            ewallet_coupons = self.env['loyalty.card'].search(
-                [('id', 'not in', self.applied_coupon_ids.ids), ('partner_id', '=', self.partner_id.id),
-                ('points', '>', 0), ('program_id.program_type', '=', 'ewallet')])
-            if ewallet_coupons:
-                self.applied_coupon_ids += ewallet_coupons
+            loyalty_card = self.env['loyalty.card'].search([
+                ('id', 'not in', self.applied_coupon_ids.ids),
+                ('partner_id', '=', self.partner_id.id),
+                ('points', '>', 0),
+                '|', ('program_id.program_type', '=', 'ewallet'),
+                     '&', ('program_id.program_type', '=', 'loyalty'),
+                          ('program_id.applies_on', '!=', 'current'),
+            ])
+            if loyalty_card:
+                self.applied_coupon_ids += loyalty_card
         # Programs that are applied to the order and count points
         points_programs = self._get_points_programs()
         # Coupon programs that require the program's rules to match but do not count for points
